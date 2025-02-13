@@ -79,7 +79,7 @@ export default function Navigation({ showAuthButtons = true }: NavigationProps) 
             href="/" 
             className="text-xl font-bold text-gray-800 hover:text-gray-600 transition-colors"
           >
-            Snippits
+            Snippit Repository
           </Link>
         </div>
       </header>
@@ -94,7 +94,7 @@ export default function Navigation({ showAuthButtons = true }: NavigationProps) 
             href="/" 
             className="text-xl font-bold text-gray-800 hover:text-gray-600 transition-colors"
           >
-            Snippits
+            Snippit Repository
           </Link>
           <div className="flex items-center gap-4">
             {isAuthenticated ? (
