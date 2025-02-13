@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import UserMenu from './UserMenu'
+import { useRouter } from 'next/navigation'
 
 interface NavigationProps {
   showAuthButtons?: boolean
@@ -12,22 +13,61 @@ interface NavigationProps {
 export default function Navigation({ showAuthButtons = true }: NavigationProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setIsAuthenticated(!!session)
-      setLoading(false)
+    const checkSession = async () => {
+      try {
+        // Check session with Supabase
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        // Verify session with our API
+        const response = await fetch('/api/auth/check')
+        const sessionCheck = await response.json()
+
+        console.log('Navigation - Session check:', {
+          hasSupabaseSession: !!session,
+          hasServerSession: sessionCheck.session,
+          userId: session?.user?.id,
+          hasAuthCookie: sessionCheck.hasAuthCookie
+        })
+
+        setIsAuthenticated(!!session && sessionCheck.session)
+      } catch (error) {
+        console.error('Navigation - Session check error:', error)
+        setIsAuthenticated(false)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    checkAuth()
+    checkSession()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(!!session)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Navigation - Auth state change:', { event, hasSession: !!session })
+      
+      if (event === 'SIGNED_IN') {
+        // Verify session with API after sign in
+        try {
+          const response = await fetch('/api/auth/check')
+          const sessionCheck = await response.json()
+          setIsAuthenticated(!!session && sessionCheck.session)
+        } catch (error) {
+          console.error('Navigation - Session verification error:', error)
+          setIsAuthenticated(false)
+        }
+        router.refresh()
+      }
+      
+      if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false)
+        router.refresh()
+        router.push('/signin')
+      }
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [router])
 
   if (loading) {
     return (

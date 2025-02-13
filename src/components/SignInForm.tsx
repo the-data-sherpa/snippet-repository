@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+
+// Get the project reference from your Supabase URL
+const PROJECT_REF = 'dmizlbynkymnaopdgkdm'
 
 export default function SignInForm() {
   const router = useRouter()
@@ -12,6 +15,29 @@ export default function SignInForm() {
     email: '',
     password: '',
   })
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      console.log('SignInForm - Initial session check:', {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        accessToken: session?.access_token ? 'present' : 'missing'
+      })
+    }
+    checkSession()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('SignInForm - Auth state change:', {
+        event,
+        hasSession: !!session,
+        userId: session?.user?.id,
+        accessToken: session?.access_token ? 'present' : 'missing'
+      })
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -26,23 +52,65 @@ export default function SignInForm() {
     setLoading(true)
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      console.log('SignInForm - Starting sign in process')
+      
+      // Sign in with Supabase
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       })
 
       if (signInError) throw signInError
 
-      if (!data.user?.email_confirmed_at) {
-        setError('Please verify your email before signing in')
-        return
+      console.log('SignInForm - Sign in response:', {
+        success: true,
+        hasUser: !!signInData?.user,
+        userId: signInData?.user?.id,
+        hasSession: !!signInData?.session
+      })
+
+      // Wait for session to be established
+      let session = signInData.session
+      if (!session) {
+        throw new Error('No session in sign-in response')
       }
 
-      // Successful sign in - redirect to home page
-      router.push('/')
-      router.refresh()
+      // Set auth cookie with exact Supabase format
+      const cookieOptions = 'path=/;max-age=28800;secure;samesite=lax'
+      const cookieName = `sb-${PROJECT_REF}-auth-token`
+      const cookieValue = JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        expires_in: 3600,
+        token_type: 'bearer',
+        type: 'access_token'
+      })
 
+      document.cookie = `${cookieName}=${encodeURIComponent(cookieValue)};${cookieOptions}`
+
+      // Wait a moment for cookies to be set
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Verify session with server
+      const response = await fetch('/api/auth/check', {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      
+      const responseData = await response.json()
+      console.log('SignInForm - Server response:', responseData)
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Failed to verify session with server')
+      }
+
+      console.log('SignInForm - Authentication successful, redirecting')
+      router.refresh()
+      router.push('/')
     } catch (err) {
+      console.error('SignInForm - Error:', err)
       setError(err instanceof Error ? err.message : 'An error occurred during sign in')
     } finally {
       setLoading(false)
