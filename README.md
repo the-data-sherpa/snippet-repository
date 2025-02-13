@@ -12,7 +12,7 @@ A web application for storing and sharing code snippets, built with Next.js, Typ
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone git@github.com:the-data-sherpa/snippet-repository.git
 cd snippit-repository
 ```
 
