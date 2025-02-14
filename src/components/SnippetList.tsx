@@ -123,24 +123,22 @@ export default function SnippetList() {
   useEffect(() => {
     loadSnippets()
     loadVotes()
-  }, [currentUser])
+  }, [])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       Prism.highlightAll()
     }
-  }, [snippets])
+  }, [filteredSnippets])
 
   useEffect(() => {
     const searchLower = searchTerm.toLowerCase()
     const filtered = snippets.filter(snippet => {
-      // First check if snippet matches search term
       const matchesSearch = 
         snippet.title.toLowerCase().includes(searchLower) ||
         snippet.description.toLowerCase().includes(searchLower) ||
         snippet.language.toLowerCase().includes(searchLower)
 
-      // Then check if snippet has all selected tags
       const matchesTags = selectedTags.length === 0 || 
         selectedTags.every(tag => snippet.tags?.includes(tag))
 
@@ -180,34 +178,44 @@ export default function SnippetList() {
   }
 
   const handleDelete = async (snippetId: string) => {
-    if (!window.confirm('Are you sure you want to delete this snippet?')) return
-
     try {
       const { error } = await supabase
         .from('snippets')
         .delete()
         .eq('id', snippetId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Delete error:', error)
+        throw error
+      }
 
-      // Remove snippet from state
-      setSnippets(prev => prev.filter(s => s.id !== snippetId))
+      // Update both snippets and filtered snippets
+      const updatedSnippets = snippets.filter(s => s.id !== snippetId)
+      setSnippets(updatedSnippets)
+      setFilteredSnippets(updatedSnippets)
+      setAvailableTags(getUniqueTags(updatedSnippets))
+      setOpenMenuId(null)
+
     } catch (err) {
       console.error('Error deleting snippet:', err)
+      alert('Failed to delete snippet. Please try again.')
     }
   }
 
-  // Add click outside handler
+  // Update the click-outside handler
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        console.log('Clicking outside menu')
         setOpenMenuId(null)
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    if (openMenuId) { // Only add listener when menu is open
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [openMenuId]) // Add openMenuId as dependency
 
   // Add update handler
   const handleUpdate = (updatedSnippet: Snippet) => {
@@ -326,7 +334,7 @@ export default function SnippetList() {
     <>
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Search Bar */}
-        <div className="mb-4">
+        <div className="mb-4 relative z-10">
           <div className="relative">
             <input
               type="text"
@@ -395,8 +403,9 @@ export default function SnippetList() {
                     by {snippet.username}
                   </div>
                   {currentUser === snippet.username && (
-                    <div className="relative" ref={menuRef}>
+                    <div className="relative">
                       <button
+                        type="button"
                         onClick={() => setOpenMenuId(openMenuId === snippet.id ? null : snippet.id)}
                         className="p-1 rounded-full hover:bg-gray-100"
                       >
@@ -406,22 +415,45 @@ export default function SnippetList() {
                       </button>
                       
                       {openMenuId === snippet.id && (
-                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-gray-200">
+                        <div 
+                          className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
+                          role="menu"
+                        >
                           <button
+                            type="button"
+                            role="menuitem"
                             onClick={() => {
                               setEditingSnippet(snippet)
                               setOpenMenuId(null)
                             }}
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           >
                             Edit Snippet
                           </button>
                           <button
+                            type="button"
+                            role="menuitem"
                             onClick={() => {
-                              handleDelete(snippet.id)
+                              if (window.confirm('Are you sure you want to delete this snippet?')) {
+                                supabase
+                                  .from('snippets')
+                                  .delete()
+                                  .eq('id', snippet.id)
+                                  .then(({ error }) => {
+                                    if (error) {
+                                      console.error('Delete error:', error)
+                                      alert('Failed to delete snippet')
+                                    } else {
+                                      const updatedSnippets = snippets.filter(s => s.id !== snippet.id)
+                                      setSnippets(updatedSnippets)
+                                      setFilteredSnippets(updatedSnippets)
+                                      setAvailableTags(getUniqueTags(updatedSnippets))
+                                    }
+                                  })
+                              }
                               setOpenMenuId(null)
                             }}
-                            className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
                           >
                             Delete Snippet
                           </button>

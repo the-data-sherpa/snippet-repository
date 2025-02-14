@@ -91,7 +91,7 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
 
       if (insertError) throw insertError
 
-      // Success
+      // Call onSuccess instead of router.refresh()
       onSuccess()
     } catch (err) {
       console.error('Error creating snippet:', err)

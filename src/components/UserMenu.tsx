@@ -28,7 +28,7 @@ export default function UserMenu() {
   }
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2"
@@ -47,7 +47,10 @@ export default function UserMenu() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+        <div 
+          className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
+          ref={menuRef}
+        >
           <div className="py-1" role="menu">
             <button
               onClick={() => {
