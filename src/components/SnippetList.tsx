@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { Snippet } from '@/types/snippets'
 import Prism from 'prismjs'
 import EditSnippetModal from './EditSnippetModal'
+import NewSnippetModal from './NewSnippetModal'
 
 // Import core Prism CSS
 import 'prismjs/themes/prism.css'
@@ -17,6 +18,7 @@ export default function SnippetList() {
   const [currentUser, setCurrentUser] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [editingSnippet, setEditingSnippet] = useState<Snippet | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Initialize Prism languages
@@ -53,24 +55,24 @@ export default function SnippetList() {
     getUser()
   }, [])
 
-  useEffect(() => {
-    async function loadSnippets() {
-      try {
-        const { data, error } = await supabase
-          .from('snippets')
-          .select('*')
-          .order('created_at', { ascending: false })
+  const loadSnippets = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snippets')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-        if (error) throw error
-        setSnippets(data)
-      } catch (err) {
-        console.error('Error loading snippets:', err)
-        setError('Failed to load snippets')
-      } finally {
-        setLoading(false)
-      }
+      if (error) throw error
+      setSnippets(data)
+    } catch (err) {
+      console.error('Error loading snippets:', err)
+      setError('Failed to load snippets')
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadSnippets()
   }, [])
 
@@ -144,6 +146,11 @@ export default function SnippetList() {
     setSnippets(prev => 
       prev.map(s => s.id === updatedSnippet.id ? updatedSnippet : s)
     )
+  }
+
+  // Pass loadSnippets to NewSnippetModal
+  const handleNewSnippet = () => {
+    setIsModalOpen(true)
   }
 
   if (loading) {
@@ -276,6 +283,15 @@ export default function SnippetList() {
           onUpdate={handleUpdate}
         />
       )}
+
+      <NewSnippetModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={() => {
+          setIsModalOpen(false)
+          loadSnippets() // Reload snippets after successful creation
+        }}
+      />
     </>
   )
 } 
