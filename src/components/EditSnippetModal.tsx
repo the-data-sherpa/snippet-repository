@@ -122,7 +122,7 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
                 required
                 value={formData.title}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black placeholder-gray-500"
               />
             </div>
 
@@ -137,7 +137,7 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
                 value={formData.description}
                 onChange={handleChange}
                 rows={4}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black placeholder-gray-500"
               />
             </div>
 
@@ -152,7 +152,7 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
                 value={formData.code}
                 onChange={handleChange}
                 rows={8}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-gray-900 placeholder-gray-500"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-black placeholder-gray-500"
               />
             </div>
 
@@ -166,7 +166,7 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
                 required
                 value={formData.language}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
               >
                 <option value="" className="text-gray-500">Select language</option>
                 <option value="javascript">JavaScript</option>
@@ -197,7 +197,7 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
                 value={formData.tags}
                 onChange={handleChange}
                 placeholder="Enter tags separated by commas"
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black placeholder-gray-500"
               />
             </div>
 

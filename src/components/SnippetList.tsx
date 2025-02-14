@@ -29,6 +29,10 @@ export default function SnippetList() {
   const menuRef = useRef<HTMLDivElement>(null)
   const [votes, setVotes] = useState<Record<string, VoteCount>>({})
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filteredSnippets, setFilteredSnippets] = useState<Snippet[]>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
 
   // Initialize Prism languages
   useEffect(() => {
@@ -73,6 +77,7 @@ export default function SnippetList() {
 
       if (error) throw error
       setSnippets(data)
+      setAvailableTags(getUniqueTags(data))
     } catch (err) {
       console.error('Error loading snippets:', err)
       setError('Failed to load snippets')
@@ -125,6 +130,25 @@ export default function SnippetList() {
       Prism.highlightAll()
     }
   }, [snippets])
+
+  useEffect(() => {
+    const searchLower = searchTerm.toLowerCase()
+    const filtered = snippets.filter(snippet => {
+      // First check if snippet matches search term
+      const matchesSearch = 
+        snippet.title.toLowerCase().includes(searchLower) ||
+        snippet.description.toLowerCase().includes(searchLower) ||
+        snippet.language.toLowerCase().includes(searchLower)
+
+      // Then check if snippet has all selected tags
+      const matchesTags = selectedTags.length === 0 || 
+        selectedTags.every(tag => snippet.tags?.includes(tag))
+
+      return matchesSearch && matchesTags
+    })
+    
+    setFilteredSnippets(filtered)
+  }, [searchTerm, snippets, selectedTags])
 
   // Map language values to Prism language classes
   const getLanguageClass = (language: string) => {
@@ -272,6 +296,24 @@ export default function SnippetList() {
     }
   }
 
+  // Add this function to get unique tags from snippets
+  const getUniqueTags = (snippets: Snippet[]) => {
+    const tags = new Set<string>()
+    snippets.forEach(snippet => {
+      snippet.tags?.forEach(tag => tags.add(tag))
+    })
+    return Array.from(tags).sort()
+  }
+
+  // Add tag toggle handler
+  const handleTagToggle = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    )
+  }
+
   if (loading) {
     return <div className="text-center py-4">Loading snippets...</div>
   }
@@ -283,8 +325,61 @@ export default function SnippetList() {
   return (
     <>
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search snippets by title, description, or language..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 pl-10 pr-4 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent text-black placeholder-gray-500"
+            />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tag Filters */}
+        {availableTags.length > 0 && (
+          <div className="mb-6">
+            <div className="text-sm text-gray-600 mb-2">Filter by tags:</div>
+            <div className="flex flex-wrap gap-2">
+              {availableTags.map(tag => (
+                <button
+                  key={tag}
+                  onClick={() => handleTagToggle(tag)}
+                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors
+                    ${selectedTags.includes(tag)
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                    }`}
+                >
+                  {tag}
+                  {selectedTags.includes(tag) && (
+                    <span className="ml-2">×</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="bg-white shadow rounded-lg divide-y">
-          {snippets.map((snippet) => (
+          {filteredSnippets.map((snippet) => (
             <div key={snippet.id} className="p-6">
               <div className="flex justify-between items-start">
                 <div className="space-y-2">
@@ -433,6 +528,13 @@ export default function SnippetList() {
               </div>
             </div>
           ))}
+          
+          {/* Add a "no results" message */}
+          {filteredSnippets.length === 0 && (
+            <div className="p-6 text-center text-gray-500">
+              No snippets found matching your search.
+            </div>
+          )}
         </div>
       </div>
 
