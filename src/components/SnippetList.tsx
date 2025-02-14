@@ -127,15 +127,14 @@ export default function SnippetList() {
     try {
       const { data, error } = await supabase
         .from('snippet_comments')
-        .select('snippet_id, count')
-        .select('*', { count: 'exact' })
-        .group_by('snippet_id')
+        .select('snippet_id')
 
       if (error) throw error
 
+      // Count comments for each snippet
       const counts: Record<string, number> = {}
-      data.forEach(row => {
-        counts[row.snippet_id] = parseInt(row.count)
+      data.forEach(comment => {
+        counts[comment.snippet_id] = (counts[comment.snippet_id] || 0) + 1
       })
       setCommentCounts(counts)
     } catch (err) {
@@ -648,10 +647,11 @@ export default function SnippetList() {
 
       {commentSnippetId && (
         <CommentModal
-          snippetId={commentSnippetId}
+          snippet={snippets.find(s => s.id === commentSnippetId)!}
           isOpen={true}
           onClose={() => setCommentSnippetId(null)}
           currentUser={currentUser}
+          onCommentChange={() => loadCommentCounts()}
         />
       )}
     </>
