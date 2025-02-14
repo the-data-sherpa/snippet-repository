@@ -1,42 +1,46 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Snippet } from '@/types/snippets'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
-interface NewSnippetModalProps {
+interface EditSnippetModalProps {
+  snippet: Snippet
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
+  onUpdate: (updatedSnippet: Snippet) => void
 }
 
-export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnippetModalProps) {
-  const router = useRouter()
+export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }: EditSnippetModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // Initial form state
-  const initialFormState = {
+  // Reset form data when snippet changes or modal opens
+  const [formData, setFormData] = useState({
     title: '',
     description: '',
     code: '',
     language: '',
     tags: ''
-  }
-  
-  const [formData, setFormData] = useState(initialFormState)
-  const modalRef = useRef<HTMLDivElement>(null)
+  })
 
-  // Reset form when modal closes
+  // Update form data when snippet changes or modal opens
   useEffect(() => {
-    if (!isOpen) {
-      setFormData(initialFormState)
+    if (isOpen && snippet) {
+      setFormData({
+        title: snippet.title,
+        description: snippet.description || '',
+        code: snippet.code,
+        language: snippet.language,
+        tags: snippet.tags?.join(', ') || ''
+      })
       setError(null)
     }
-  }, [isOpen])
+  }, [isOpen, snippet])
 
+  const modalRef = useRef<HTMLDivElement>(null)
+  
   useClickOutside(modalRef, () => {
     onClose()
   })
@@ -58,44 +62,26 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
     setLoading(true)
 
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('User not authenticated')
-
-      // Get user's profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('username')
-        .eq('email', user.email)
-        .single()
-
-      if (profileError || !profile) {
-        throw new Error('Could not find user profile')
-      }
-
-      // Insert the snippet
-      const { data, error: insertError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('snippets')
-        .insert([
-          {
-            title: formData.title,
-            description: formData.description,
-            code: formData.code,
-            language: formData.language,
-            tags: formData.tags.split(',').map(tag => tag.trim()),
-            username: profile.username
-          }
-        ])
+        .update({
+          title: formData.title,
+          description: formData.description,
+          code: formData.code,
+          language: formData.language,
+          tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+        })
+        .eq('id', snippet.id)
         .select()
         .single()
 
-      if (insertError) throw insertError
+      if (updateError) throw updateError
 
-      // Success
-      onSuccess()
+      onUpdate(data)
+      onClose()
     } catch (err) {
-      console.error('Error creating snippet:', err)
-      setError(err instanceof Error ? err.message : 'Failed to create snippet')
+      console.error('Error updating snippet:', err)
+      setError(err instanceof Error ? err.message : 'Failed to update snippet')
     } finally {
       setLoading(false)
     }
@@ -109,7 +95,7 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Submit New Code Snippet</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Edit Snippet</h2>
             <button
               onClick={onClose}
               className="text-gray-500 hover:text-gray-700"
@@ -136,7 +122,6 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
                 required
                 value={formData.title}
                 onChange={handleChange}
-                placeholder="Enter a descriptive title"
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
               />
             </div>
@@ -151,7 +136,6 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
                 required
                 value={formData.description}
                 onChange={handleChange}
-                placeholder="Explain what your code does and how to use it"
                 rows={4}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
               />
@@ -167,7 +151,6 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
                 required
                 value={formData.code}
                 onChange={handleChange}
-                placeholder="Paste your code here"
                 rows={8}
                 className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-gray-900 placeholder-gray-500"
               />
@@ -231,7 +214,7 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
                 disabled={loading}
                 className="px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-50"
               >
-                {loading ? 'Submitting...' : 'Submit Snippet'}
+                {loading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </form>
