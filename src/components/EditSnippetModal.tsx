@@ -85,8 +85,95 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
               </div>
             )}
 
-            {/* Form fields - similar to NewSnippetModal */}
-            {/* ... copy the form fields from NewSnippetModal ... */}
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                Title
+              </label>
+              <input
+                type="text"
+                id="title"
+                name="title"
+                required
+                value={formData.title}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                Description
+              </label>
+              <textarea
+                id="description"
+                name="description"
+                required
+                value={formData.description}
+                onChange={handleChange}
+                rows={4}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="code" className="block text-sm font-medium text-gray-700">
+                Code
+              </label>
+              <textarea
+                id="code"
+                name="code"
+                required
+                value={formData.code}
+                onChange={handleChange}
+                rows={8}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-gray-900 placeholder-gray-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="language" className="block text-sm font-medium text-gray-700">
+                Programming Language
+              </label>
+              <select
+                id="language"
+                name="language"
+                required
+                value={formData.language}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900"
+              >
+                <option value="" className="text-gray-500">Select language</option>
+                <option value="javascript">JavaScript</option>
+                <option value="typescript">TypeScript</option>
+                <option value="python">Python</option>
+                <option value="java">Java</option>
+                <option value="csharp">C#</option>
+                <option value="cpp">C++</option>
+                <option value="go">Go</option>
+                <option value="rust">Rust</option>
+                <option value="php">PHP</option>
+                <option value="ruby">Ruby</option>
+                <option value="kql">KQL</option>
+                <option value="bash">Bash</option>
+                <option value="powershell">PowerShell</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="tags" className="block text-sm font-medium text-gray-700">
+                Tags
+              </label>
+              <input
+                type="text"
+                id="tags"
+                name="tags"
+                value={formData.tags}
+                onChange={handleChange}
+                placeholder="Enter tags separated by commas"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500"
+              />
+            </div>
 
             <div className="flex justify-end gap-3">
               <button
