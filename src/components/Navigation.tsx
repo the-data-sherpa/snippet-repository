@@ -130,6 +130,10 @@ export default function Navigation({ showAuthButtons = true }: NavigationProps) 
       <NewSnippetModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onSuccess={() => {
+          setIsModalOpen(false)
+          window.location.reload() // This will refresh the page to show the new snippet
+        }}
       />
     </>
   )
