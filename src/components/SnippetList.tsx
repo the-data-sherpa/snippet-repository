@@ -7,6 +7,7 @@ import Prism from 'prismjs'
 import EditSnippetModal from './EditSnippetModal'
 import NewSnippetModal from './NewSnippetModal'
 import { User } from '@supabase/supabase-js'
+import CommentModal from './CommentModal'
 
 // Import core Prism CSS
 import 'prismjs/themes/prism.css'
@@ -33,6 +34,8 @@ export default function SnippetList() {
   const [filteredSnippets, setFilteredSnippets] = useState<Snippet[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
+  const [commentSnippetId, setCommentSnippetId] = useState<string | null>(null)
 
   // Initialize Prism languages
   useEffect(() => {
@@ -120,9 +123,30 @@ export default function SnippetList() {
     }
   }
 
+  const loadCommentCounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snippet_comments')
+        .select('snippet_id, count')
+        .select('*', { count: 'exact' })
+        .group_by('snippet_id')
+
+      if (error) throw error
+
+      const counts: Record<string, number> = {}
+      data.forEach(row => {
+        counts[row.snippet_id] = parseInt(row.count)
+      })
+      setCommentCounts(counts)
+    } catch (err) {
+      console.error('Error loading comment counts:', err)
+    }
+  }
+
   useEffect(() => {
     loadSnippets()
     loadVotes()
+    loadCommentCounts()
   }, [])
 
   useEffect(() => {
@@ -322,6 +346,11 @@ export default function SnippetList() {
     )
   }
 
+  // Add handler for comment click
+  const handleCommentClick = (snippetId: string) => {
+    setCommentSnippetId(snippetId)
+  }
+
   if (loading) {
     return <div className="text-center py-4">Loading snippets...</div>
   }
@@ -504,6 +533,7 @@ export default function SnippetList() {
               </details>
 
               <div className="mt-4 flex items-center justify-between">
+                {/* Left side - tags */}
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                     {snippet.language}
@@ -518,44 +548,72 @@ export default function SnippetList() {
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Right side - comments and votes */}
+                <div className="flex items-center gap-4">
+                  {/* Comments */}
                   <button
-                    onClick={() => handleVote(snippet.id, true)}
-                    disabled={!currentUser}
-                    className={`p-1 hover:bg-gray-100 transition-colors ${
-                      votes[snippet.id]?.userVote === true 
-                        ? 'text-green-600' 
-                        : 'text-gray-400'
-                    }`}
-                    title={currentUser ? 'Upvote' : 'Sign in to vote'}
+                    onClick={() => handleCommentClick(snippet.id)}
+                    className="flex items-center gap-1 text-gray-500 hover:text-gray-700"
+                    title="View comments"
                   >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M4 15l8-8 8 8H4z" />
+                    <svg 
+                      className="w-5 h-5" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" 
+                      />
                     </svg>
+                    <span className="text-sm font-medium">
+                      {commentCounts[snippet.id] || 0}
+                    </span>
                   </button>
-                  <span className={`text-base font-semibold min-w-[2rem] text-center ${
-                    ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) > 0
-                      ? 'text-green-700'
-                      : ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) < 0
-                        ? 'text-blue-700'
-                        : 'text-gray-600'
-                  }`}>
-                    {(votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)}
-                  </span>
-                  <button
-                    onClick={() => handleVote(snippet.id, false)}
-                    disabled={!currentUser}
-                    className={`p-1 hover:bg-gray-100 transition-colors ${
-                      votes[snippet.id]?.userVote === false 
-                        ? 'text-blue-600' 
-                        : 'text-gray-400'
-                    }`}
-                    title={currentUser ? 'Downvote' : 'Sign in to vote'}
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M4 9l8 8 8-8H4z" />
-                    </svg>
-                  </button>
+
+                  {/* Voting */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleVote(snippet.id, true)}
+                      disabled={!currentUser}
+                      className={`p-1 hover:bg-gray-100 transition-colors ${
+                        votes[snippet.id]?.userVote === true 
+                          ? 'text-green-600' 
+                          : 'text-gray-400'
+                      }`}
+                      title={currentUser ? 'Upvote' : 'Sign in to vote'}
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 15l8-8 8 8H4z" />
+                      </svg>
+                    </button>
+                    <span className={`text-base font-semibold min-w-[2rem] text-center ${
+                      ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) > 0
+                        ? 'text-green-700'
+                        : ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) < 0
+                          ? 'text-blue-700'
+                          : 'text-gray-600'
+                    }`}>
+                      {(votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)}
+                    </span>
+                    <button
+                      onClick={() => handleVote(snippet.id, false)}
+                      disabled={!currentUser}
+                      className={`p-1 hover:bg-gray-100 transition-colors ${
+                        votes[snippet.id]?.userVote === false 
+                          ? 'text-blue-600' 
+                          : 'text-gray-400'
+                      }`}
+                      title={currentUser ? 'Downvote' : 'Sign in to vote'}
+                    >
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 9l8 8 8-8H4z" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -587,6 +645,15 @@ export default function SnippetList() {
           loadSnippets() // Reload snippets after successful creation
         }}
       />
+
+      {commentSnippetId && (
+        <CommentModal
+          snippetId={commentSnippetId}
+          isOpen={true}
+          onClose={() => setCommentSnippetId(null)}
+          currentUser={currentUser}
+        />
+      )}
     </>
   )
 } 
