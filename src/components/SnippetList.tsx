@@ -6,9 +6,16 @@ import { Snippet } from '@/types/snippets'
 import Prism from 'prismjs'
 import EditSnippetModal from './EditSnippetModal'
 import NewSnippetModal from './NewSnippetModal'
+import { User } from '@supabase/supabase-js'
 
 // Import core Prism CSS
 import 'prismjs/themes/prism.css'
+
+interface VoteCount {
+  upvotes: number
+  downvotes: number
+  userVote: boolean | null // true for upvote, false for downvote, null for no vote
+}
 
 export default function SnippetList() {
   const [snippets, setSnippets] = useState<Snippet[]>([])
@@ -20,6 +27,8 @@ export default function SnippetList() {
   const [editingSnippet, setEditingSnippet] = useState<Snippet | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const [votes, setVotes] = useState<Record<string, VoteCount>>({})
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
 
   // Initialize Prism languages
   useEffect(() => {
@@ -72,9 +81,44 @@ export default function SnippetList() {
     }
   }
 
+  const loadVotes = async () => {
+    try {
+      const { data: voteData, error: voteError } = await supabase
+        .from('snippet_votes')
+        .select('snippet_id, vote_type, username')
+
+      if (voteError) throw voteError
+
+      // Calculate vote counts
+      const voteCounts: Record<string, VoteCount> = {}
+      voteData.forEach(vote => {
+        if (!voteCounts[vote.snippet_id]) {
+          voteCounts[vote.snippet_id] = {
+            upvotes: 0,
+            downvotes: 0,
+            userVote: null
+          }
+        }
+        if (vote.vote_type) {
+          voteCounts[vote.snippet_id].upvotes++
+        } else {
+          voteCounts[vote.snippet_id].downvotes++
+        }
+        if (vote.username === currentUser) {
+          voteCounts[vote.snippet_id].userVote = vote.vote_type
+        }
+      })
+
+      setVotes(voteCounts)
+    } catch (err) {
+      console.error('Error loading votes:', err)
+    }
+  }
+
   useEffect(() => {
     loadSnippets()
-  }, [])
+    loadVotes()
+  }, [currentUser])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -151,6 +195,81 @@ export default function SnippetList() {
   // Pass loadSnippets to NewSnippetModal
   const handleNewSnippet = () => {
     setIsModalOpen(true)
+  }
+
+  // Add voting handler
+  const handleVote = async (snippetId: string, voteType: boolean) => {
+    if (!currentUser) {
+      return
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const currentVote = votes[snippetId]?.userVote
+
+      // If clicking the same vote type, remove the vote
+      if (currentVote === voteType) {
+        const { error } = await supabase
+          .from('snippet_votes')
+          .delete()
+          .eq('snippet_id', snippetId)
+          .eq('username', currentUser)
+
+        if (error) throw error
+      } else {
+        // If switching votes or voting for the first time, upsert the new vote
+        const { error } = await supabase
+          .from('snippet_votes')
+          .upsert({
+            snippet_id: snippetId,
+            username: currentUser,
+            user_id: user.id,
+            vote_type: voteType
+          }, {
+            onConflict: 'snippet_id,username',
+            ignoreDuplicates: false
+          })
+
+        if (error) throw error
+      }
+
+      // Update local state immediately for better UX
+      setVotes(prev => ({
+        ...prev,
+        [snippetId]: {
+          ...prev[snippetId],
+          userVote: currentVote === voteType ? null : voteType,
+          upvotes: calculateNewVoteCount(prev[snippetId]?.upvotes || 0, currentVote, voteType, true),
+          downvotes: calculateNewVoteCount(prev[snippetId]?.downvotes || 0, currentVote, voteType, false)
+        }
+      }))
+
+      // Reload votes from server to ensure consistency
+      await loadVotes()
+    } catch (err) {
+      console.error('Error voting:', err)
+    }
+  }
+
+  // Helper function to calculate new vote counts
+  const calculateNewVoteCount = (
+    currentCount: number,
+    oldVote: boolean | null,
+    newVote: boolean,
+    isUpvote: boolean
+  ): number => {
+    if (oldVote === newVote) {
+      // Removing vote
+      return isUpvote === oldVote ? currentCount - 1 : currentCount
+    } else if (oldVote === !isUpvote) {
+      // Switching vote
+      return isUpvote === newVote ? currentCount + 1 : currentCount - 1
+    } else {
+      // New vote
+      return isUpvote === newVote ? currentCount + 1 : currentCount
+    }
   }
 
   if (loading) {
@@ -257,18 +376,60 @@ export default function SnippetList() {
                 </div>
               </details>
 
-              <div className="mt-4 flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                  {snippet.language}
-                </span>
-                {snippet.tags?.map((tag) => (
-                  <span 
-                    key={tag} 
-                    className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-                  >
-                    {tag}
+              <div className="mt-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    {snippet.language}
                   </span>
-                ))}
+                  {snippet.tags?.map((tag) => (
+                    <span 
+                      key={tag} 
+                      className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleVote(snippet.id, true)}
+                    disabled={!currentUser}
+                    className={`p-1 hover:bg-gray-100 transition-colors ${
+                      votes[snippet.id]?.userVote === true 
+                        ? 'text-green-600' 
+                        : 'text-gray-400'
+                    }`}
+                    title={currentUser ? 'Upvote' : 'Sign in to vote'}
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M4 15l8-8 8 8H4z" />
+                    </svg>
+                  </button>
+                  <span className={`text-base font-semibold min-w-[2rem] text-center ${
+                    ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) > 0
+                      ? 'text-green-700'
+                      : ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) < 0
+                        ? 'text-blue-700'
+                        : 'text-gray-600'
+                  }`}>
+                    {(votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)}
+                  </span>
+                  <button
+                    onClick={() => handleVote(snippet.id, false)}
+                    disabled={!currentUser}
+                    className={`p-1 hover:bg-gray-100 transition-colors ${
+                      votes[snippet.id]?.userVote === false 
+                        ? 'text-blue-600' 
+                        : 'text-gray-400'
+                    }`}
+                    title={currentUser ? 'Downvote' : 'Sign in to vote'}
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M4 9l8 8 8-8H4z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           ))}
