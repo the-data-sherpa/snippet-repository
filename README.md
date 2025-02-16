@@ -36,38 +36,189 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 
 5. Set up the database schema:
    - Go to your Supabase project's SQL editor
-   - Run the following SQL to create the profiles table:
+   - Run the following SQL to create all of the needed tables:
 
 ```sql
-create table profiles (
-  id uuid references auth.users on delete cascade primary key,
-  username text unique not null,
-  name text not null,
-  email text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+CREATE TABLE public.profiles (
+  id uuid NOT NULL,
+  username text NOT NULL,
+  name text NOT NULL,
+  email text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_username_key UNIQUE (username),
+  CONSTRAINT profiles_username_unique UNIQUE (username),
+  CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
 );
 
--- Enable Row Level Security
-alter table profiles enable row level security;
+CREATE TABLE public.snippets (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  title text NOT NULL,
+  description text NULL,
+  code text NOT NULL,
+  language text NOT NULL,
+  tags text[] NULL DEFAULT '{}'::text[],
+  username text NOT NULL DEFAULT 'anonymous'::text,
+  CONSTRAINT snippets_pkey PRIMARY KEY (id),
+  CONSTRAINT snippets_username_fkey FOREIGN KEY (username) REFERENCES profiles(username) ON DELETE CASCADE
+);
 
--- Create policy to allow users to read their own profile
-create policy "Users can view own profile"
-  on profiles for select
-  using ( auth.uid() = id );
+CREATE TABLE public.snippet_comments (
+  id uuid NOT NULL DEFAULT extensions.uuid_generate_v4(),
+  snippet_id uuid NULL,
+  username text NULL,
+  content text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT snippet_comments_pkey PRIMARY KEY (id),
+  CONSTRAINT snippet_comments_snippet_id_fkey FOREIGN KEY (snippet_id) REFERENCES snippets(id) ON DELETE CASCADE,
+  CONSTRAINT snippet_comments_username_fkey FOREIGN KEY (username) REFERENCES profiles(username) ON DELETE CASCADE
+);
 
--- Create policy to allow users to update their own profile
-create policy "Users can update own profile"
-  on profiles for update
-  using ( auth.uid() = id );
+CREATE TABLE public.snippet_votes (
+  id uuid NOT NULL DEFAULT extensions.uuid_generate_v4(),
+  snippet_id uuid NULL,
+  username text NULL,
+  vote_type boolean NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  user_id uuid NOT NULL,
+  CONSTRAINT snippet_votes_pkey PRIMARY KEY (id),
+  CONSTRAINT snippet_votes_snippet_id_username_key UNIQUE (snippet_id, username),
+  CONSTRAINT snippet_votes_snippet_id_fkey FOREIGN KEY (snippet_id) REFERENCES snippets(id) ON DELETE CASCADE,
+  CONSTRAINT snippet_votes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT snippet_votes_username_fkey FOREIGN KEY (username) REFERENCES profiles(username) ON DELETE CASCADE
+);
+
+CREATE TABLE public.username_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  old_username text NOT NULL,
+  new_username text NOT NULL,
+  changed_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  profile_id uuid NOT NULL,
+  CONSTRAINT username_history_pkey PRIMARY KEY (id),
+  CONSTRAINT username_history_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES profiles(id)
+);
 ```
 
-6. Configure authentication:
+6. Set up the Role Level Security (RLS) policies:
+   - Go to your Supabase project's RLS policies
+   - Set the policies for the snippets, snippet_comments, snippet_votes, and username_history tables
+
+```sql
+CREATE POLICY "Users can read their own profiles" ON public.profiles
+FOR SELECT
+TO authenticated
+USING ((SELECT auth.uid()) = id);
+
+CREATE POLICY "Users can insert profiles" ON public.profiles
+FOR INSERT
+TO authenticated
+WITH CHECK (true);
+
+CREATE POLICY "Users can update their own profiles" ON public.profiles
+FOR UPDATE
+TO authenticated
+USING ((SELECT auth.uid()) = id)
+WITH CHECK (true);
+
+CREATE POLICY "Users can delete their own profiles" ON public.profiles
+FOR DELETE
+TO authenticated
+USING ((SELECT auth.uid()) = id);
+
+CREATE POLICY "Users can read all snippets" ON public.snippets
+FOR SELECT
+TO authenticated, anon
+USING (true);
+
+CREATE POLICY "Users can insert snippets" ON public.snippets
+FOR INSERT
+TO authenticated
+WITH CHECK ((SELECT profiles.username FROM profiles WHERE (profiles.email = (auth.jwt() ->> 'email'::text))) = username);
+
+CREATE POLICY "Users can update their own snippets" ON public.snippets
+FOR UPDATE
+TO authenticated
+USING ((SELECT profiles.username FROM profiles WHERE (profiles.email = (auth.jwt() ->> 'email'::text))) = username)
+WITH CHECK (true);
+
+CREATE POLICY "Users can delete their own snippets" ON public.snippets
+FOR DELETE
+TO authenticated
+USING ((SELECT profiles.username FROM profiles WHERE (profiles.email = (auth.jwt() ->> 'email'::text))) = username);
+
+CREATE POLICY "Users can read all comments" ON public.snippet_comments
+FOR SELECT
+TO authenticated, anon
+USING (true);
+
+CREATE POLICY "Users can insert comments" ON public.snippet_comments
+FOR INSERT
+TO authenticated
+WITH CHECK ((SELECT profiles.username FROM profiles WHERE (profiles.email = (auth.jwt() ->> 'email'::text))) = username);
+
+CREATE POLICY "Users can update their own comments" ON public.snippet_comments
+FOR UPDATE
+TO authenticated
+USING ((SELECT profiles.username FROM profiles WHERE (profiles.email = (auth.jwt() ->> 'email'::text))) = username)
+WITH CHECK (true);
+
+CREATE POLICY "Users can delete their own comments" ON public.snippet_comments
+FOR DELETE
+TO authenticated
+USING ((SELECT profiles.username FROM profiles WHERE (profiles.email = (auth.jwt() ->> 'email'::text))) = username);
+
+CREATE POLICY "Users can read all votes" ON public.snippet_votes
+FOR SELECT
+TO authenticated, anon
+USING (true);
+
+CREATE POLICY "Users can insert votes" ON public.snippet_votes
+FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own votes" ON public.snippet_votes
+FOR UPDATE
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (true);
+
+CREATE POLICY "Users can delete their own votes" ON public.snippet_votes
+FOR DELETE
+TO authenticated
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can read username history" ON public.username_history
+FOR SELECT
+TO authenticated, anon
+USING (true);
+
+CREATE POLICY "Users can insert username history" ON public.username_history
+FOR INSERT
+TO authenticated
+WITH CHECK (true);
+
+CREATE POLICY "Users can update their own username history" ON public.username_history
+FOR UPDATE
+TO authenticated
+USING ((SELECT profiles.id FROM profiles WHERE (profiles.username = (SELECT username FROM public.username_history WHERE id = (SELECT auth.uid())))) = profile_id)
+WITH CHECK (true);
+
+CREATE POLICY "Users can delete their own username history" ON public.username_history
+FOR DELETE
+TO authenticated
+USING ((SELECT profiles.id FROM profiles WHERE (profiles.username = (SELECT username FROM public.username_history WHERE id = (SELECT auth.uid())))) = profile_id);
+```
+
+8. Configure authentication:
    - In your Supabase dashboard, go to Authentication > Settings
    - Enable Email provider
    - Configure email templates if desired
    - Set up any additional providers as needed
 
-7. Run the development server:
+9. Run the development server:
 ```bash
 npm run dev
 ```
