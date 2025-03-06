@@ -33,15 +33,15 @@ git pull
 
 # Build and start the Docker containers
 echo "Building and starting Docker containers..."
-docker comppose down
-docker comppose up -d --build
+docker compose down
+docker compose up -d --build
 
 # Check if the containers are running
 echo "Checking if the containers are running..."
-if docker comppose ps | grep -q "Up"; then
+if docker compose ps | grep -q "Up"; then
   echo "Deployment successful! The application is now running."
   echo "You can access it at http://localhost:3000"
 else
-  echo "Error: Deployment failed. Please check the logs with 'docker comppose logs -f app'"
+  echo "Error: Deployment failed. Please check the logs with 'docker compose logs -f app'"
   exit 1
 fi 
