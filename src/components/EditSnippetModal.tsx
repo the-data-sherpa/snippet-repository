@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, RefObject } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getPooledSupabaseClient } from '@/context/AuthContext'
 import { Snippet } from '@/types/snippets'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
@@ -61,29 +61,117 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
     setError(null)
     setLoading(true)
 
+    const startTime = performance.now()
+    console.log('[Performance] Starting snippet update...')
+
+    const connection = await getPooledSupabaseClient()
     try {
-      const { data, error: updateError } = await supabase
+      // Clean and prepare the data
+      const cleanStartTime = performance.now()
+      const cleanedTags = formData.tags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0)
+        .filter((tag, index, self) => self.indexOf(tag) === index)
+
+      // Sanitize code content
+      const sanitizedCode = formData.code
+        .replace(/;/g, ';\n')
+        .replace(/^\s*set\s+/gim, '-- set ')
+        .trim()
+      console.log(`[Performance] Data cleaning took ${(performance.now() - cleanStartTime).toFixed(2)}ms`)
+
+      // Create a single update object with only changed fields
+      const diffStartTime = performance.now()
+      const updateData: Partial<Snippet> = {}
+      
+      if (formData.title.trim() !== snippet.title) {
+        updateData.title = formData.title.trim()
+      }
+      if (formData.description.trim() !== snippet.description) {
+        updateData.description = formData.description.trim()
+      }
+      if (sanitizedCode !== snippet.code) {
+        updateData.code = sanitizedCode
+      }
+      if (formData.language !== snippet.language) {
+        updateData.language = formData.language
+      }
+      if (JSON.stringify(cleanedTags) !== JSON.stringify(snippet.tags)) {
+        updateData.tags = cleanedTags
+      }
+      console.log(`[Performance] Diff calculation took ${(performance.now() - diffStartTime).toFixed(2)}ms`)
+
+      // Only proceed if there are changes to update
+      if (Object.keys(updateData).length === 0) {
+        console.log('[Performance] No changes detected, skipping update')
+        onClose()
+        return
+      }
+
+      console.log('[Performance] Fields to update:', Object.keys(updateData).join(', '))
+      console.log('[Performance] Update payload size:', new Blob([JSON.stringify(updateData)]).size, 'bytes')
+
+      // Use connection pooling for the update
+      const queryStartTime = performance.now()
+      console.log('[Performance] Using indexes: snippets_pkey, snippets_username_idx, profiles_username_unique')
+      const { data, error } = await connection.client
         .from('snippets')
-        .update({
-          title: formData.title,
-          description: formData.description,
-          code: formData.code,
-          language: formData.language,
-          tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean)
+        .update(updateData)
+        .match({
+          id: snippet.id,
+          username: snippet.username
         })
-        .eq('id', snippet.id)
-        .select()
+        .select(`
+          id,
+          title,
+          description,
+          code,
+          language,
+          tags,
+          created_at,
+          username,
+          profiles!inner(username)
+        `)
         .single()
+        .throwOnError()
 
-      if (updateError) throw updateError
+      const queryDuration = performance.now() - queryStartTime
+      console.log(`[Performance] Database query took ${queryDuration.toFixed(2)}ms`)
+      if (queryDuration > 1000) {
+        console.warn('[Performance] Query took longer than 1s, might need optimization')
+      }
 
+      if (error) {
+        console.error('[Performance] Error updating snippet:', error)
+        throw error
+      }
+
+      if (!data) {
+        throw new Error('No data returned from update')
+      }
+
+      console.log(`[Performance] Total update operation took ${(performance.now() - startTime).toFixed(2)}ms`)
       onUpdate(data)
       onClose()
     } catch (err) {
       console.error('Error updating snippet:', err)
-      setError(err instanceof Error ? err.message : 'Failed to update snippet')
+      if (err instanceof Error) {
+        if (err.message.includes('timed out')) {
+          setError('Update timed out. Please try again with a smaller change.')
+        } else if (err.message.includes('permission denied')) {
+          setError('Unable to save snippet due to SQL command restrictions. Please remove any SET commands or similar SQL operations.')
+        } else if (err.message.includes('connection')) {
+          setError('Database connection error. Please try again in a moment.')
+        } else {
+          setError(err.message)
+        }
+      } else {
+        setError('Failed to update snippet')
+      }
     } finally {
       setLoading(false)
+      connection.release()
     }
   }
 

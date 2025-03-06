@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
+import { getPooledSupabaseClient } from '@/context/AuthContext'
+import { useAuth } from '@/context/AuthContext'
 
 export default function SignInForm() {
   const router = useRouter()
+  const { user, loading: authLoading, refreshAuth } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
@@ -14,44 +16,11 @@ export default function SignInForm() {
   })
 
   useEffect(() => {
-    const supabase = createClient()
-    
-    const checkSession = async () => {
-      // Use getUser() which is more secure as it authenticates with the Supabase Auth server
-      const { data: { user }, error } = await supabase.auth.getUser()
-      
-      console.log('SignInForm - Initial auth check:', {
-        isAuthenticated: !!user,
-        userId: user?.id,
-        error: error?.message
-      })
-      
-      // If already signed in, redirect to home
-      if (user) {
-        router.push('/')
-      }
+    // If already signed in, redirect to home
+    if (user && !authLoading) {
+      router.push('/')
     }
-    checkSession()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('SignInForm - Auth state change:', {
-        event,
-        hasSession: !!session
-      })
-      
-      // For SIGNED_IN events, verify the user with getUser()
-      if (event === 'SIGNED_IN') {
-        const { data: { user } } = await supabase.auth.getUser()
-        console.log('SignInForm - Verified user after sign in:', {
-          isAuthenticated: !!user,
-          userId: user?.id
-        })
-        router.refresh()
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [router])
+  }, [user, authLoading, router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -65,41 +34,34 @@ export default function SignInForm() {
     setError(null)
     setLoading(true)
 
+    const connection = await getPooledSupabaseClient()
     try {
       console.log('SignInForm - Starting sign in process')
-      const supabase = createClient()
       
-      // Sign in with Supabase
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      // Sign in with pooled connection
+      const { error: signInError } = await connection.client.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       })
 
       if (signInError) throw signInError
 
-      // Verify the user with getUser() which is more secure
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      
-      if (userError || !user) {
-        throw new Error(userError?.message || 'Failed to authenticate user')
-      }
+      // Refresh auth context to get the latest user state
+      await refreshAuth()
 
-      console.log('SignInForm - Authentication successful:', {
-        userId: user.id
-      })
-      
-      // Wait a moment for session to be fully established
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      console.log('SignInForm - Redirecting')
-      router.refresh()
+      console.log('SignInForm - Authentication successful')
       router.push('/')
     } catch (err) {
       console.error('SignInForm - Error:', err)
       setError(err instanceof Error ? err.message : 'An error occurred during sign in')
     } finally {
       setLoading(false)
+      connection.release()
     }
+  }
+
+  if (authLoading) {
+    return <div>Loading...</div>
   }
 
   return (

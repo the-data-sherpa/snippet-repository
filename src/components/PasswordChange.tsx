@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getPooledSupabaseClient } from '@/context/AuthContext'
+import { useAuth } from '@/context/AuthContext'
 
 export default function PasswordChange() {
+  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -28,24 +30,23 @@ export default function PasswordChange() {
     setSuccess(false)
     setLoading(true)
 
+    if (!user?.email) {
+      setError('Unable to retrieve user email')
+      setLoading(false)
+      return
+    }
+
     if (formData.newPassword !== formData.confirmPassword) {
       setError('New passwords do not match')
       setLoading(false)
       return
     }
 
+    const connection = await getPooledSupabaseClient()
     try {
-      // First verify the current password
-      const { data: userData } = await supabase.auth.getUser();
-      const userEmail = userData.user?.email;
-      
-      if (!userEmail) {
-        setError('Unable to retrieve user email');
-        return;
-      }
-      
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: userEmail,
+      // First verify the current password by attempting to sign in
+      const { error: signInError } = await connection.client.auth.signInWithPassword({
+        email: user.email,
         password: formData.currentPassword,
       })
 
@@ -54,8 +55,8 @@ export default function PasswordChange() {
         return
       }
 
-      // Update to new password
-      const { error: updateError } = await supabase.auth.updateUser({
+      // Update to the new password
+      const { error: updateError } = await connection.client.auth.updateUser({
         password: formData.newPassword
       })
 
@@ -68,9 +69,11 @@ export default function PasswordChange() {
         confirmPassword: '',
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while updating password')
+      console.error('Password change error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to change password')
     } finally {
       setLoading(false)
+      connection.release()
     }
   }
 
@@ -86,7 +89,7 @@ export default function PasswordChange() {
 
       {success && (
         <div className="mb-4 bg-green-50 text-green-500 p-4 rounded-lg">
-          Password updated successfully
+          Password successfully changed
         </div>
       )}
 
@@ -97,12 +100,12 @@ export default function PasswordChange() {
           </label>
           <input
             type="password"
-            name="currentPassword"
             id="currentPassword"
+            name="currentPassword"
             value={formData.currentPassword}
             onChange={handleChange}
-            required
             className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
+            required
           />
         </div>
 
@@ -112,12 +115,12 @@ export default function PasswordChange() {
           </label>
           <input
             type="password"
-            name="newPassword"
             id="newPassword"
+            name="newPassword"
             value={formData.newPassword}
             onChange={handleChange}
-            required
             className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
+            required
           />
         </div>
 
@@ -127,21 +130,21 @@ export default function PasswordChange() {
           </label>
           <input
             type="password"
-            name="confirmPassword"
             id="confirmPassword"
+            name="confirmPassword"
             value={formData.confirmPassword}
             onChange={handleChange}
-            required
             className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
+            required
           />
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
+          className="w-full bg-gray-800 text-white py-2 px-4 rounded-lg hover:bg-gray-700 disabled:opacity-50"
         >
-          {loading ? 'Updating Password...' : 'Update Password'}
+          {loading ? 'Changing Password...' : 'Change Password'}
         </button>
       </form>
     </div>

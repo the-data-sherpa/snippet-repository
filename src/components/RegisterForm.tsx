@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect } from 'react'
+import { getPooledSupabaseClient } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/context/AuthContext'
 
 export default function RegisterForm() {
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
@@ -15,6 +17,13 @@ export default function RegisterForm() {
     password: '',
     verifyPassword: ''
   })
+
+  useEffect(() => {
+    // If already signed in, redirect to home
+    if (user && !authLoading) {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
 
   const validateEmail = (email: string): boolean => {
     const domain = email.split('@')[1]
@@ -47,41 +56,33 @@ export default function RegisterForm() {
     setError(null)
     setLoading(true)
 
-    // Validate email domain
-    if (!validateEmail(formData.email)) {
-      setError('Email must be a cribl.io domain')
-      setLoading(false)
-      return
-    }
-
-    // Validate passwords match
     if (formData.password !== formData.verifyPassword) {
       setError('Passwords do not match')
       setLoading(false)
       return
     }
 
+    if (!validateEmail(formData.email)) {
+      setError('Email must be a cribl.io domain')
+      setLoading(false)
+      return
+    }
+
+    const connection = await getPooledSupabaseClient()
     try {
-      // Register user with Supabase
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // Register the user
+      const { error: signUpError } = await connection.client.auth.signUp({
         email: formData.email,
         password: formData.password,
-        options: {
-          data: {
-            username: formData.username,
-            name: formData.name,
-          }
-        }
       })
 
-      if (authError) throw authError
+      if (signUpError) throw signUpError
 
-      // Create profile in profiles table
-      const { error: profileError } = await supabase
+      // Create the user profile
+      const { error: profileError } = await connection.client
         .from('profiles')
         .insert([
           {
-            id: authData.user?.id,
             username: formData.username,
             name: formData.name,
             email: formData.email,
@@ -90,15 +91,18 @@ export default function RegisterForm() {
 
       if (profileError) throw profileError
 
-      // Update success message and redirect
-      alert('Registration successful! Please check your email to verify your account before signing in.')
       router.push('/signin')
-
     } catch (err) {
+      console.error('Registration error:', err)
       setError(err instanceof Error ? err.message : 'An error occurred during registration')
     } finally {
       setLoading(false)
+      connection.release()
     }
+  }
+
+  if (authLoading) {
+    return <div>Loading...</div>
   }
 
   return (

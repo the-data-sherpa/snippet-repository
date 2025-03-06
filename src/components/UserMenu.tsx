@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/context/AuthContext'
 
 export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const { profile, signOut } = useAuth()
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -22,9 +23,8 @@ export default function UserMenu() {
   }, [])
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/signin')
-    router.refresh()
+    await signOut()
+    setIsOpen(false)
   }
 
   return (
@@ -34,7 +34,9 @@ export default function UserMenu() {
         className="flex items-center gap-2"
       >
         <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
-          <span className="text-sm font-medium text-gray-600">U</span>
+          <span className="text-sm font-medium text-gray-600">
+            {profile?.username?.[0]?.toUpperCase() || 'U'}
+          </span>
         </div>
         <svg
           className={`w-4 h-4 text-gray-600 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -63,10 +65,7 @@ export default function UserMenu() {
               Profile
             </button>
             <button
-              onClick={() => {
-                handleSignOut()
-                setIsOpen(false)
-              }}
+              onClick={handleSignOut}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               role="menuitem"
             >

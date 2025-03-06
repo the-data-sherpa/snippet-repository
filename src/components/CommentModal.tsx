@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { getPooledSupabaseClient } from '@/context/AuthContext'
 import Prism from 'prismjs'
 
 interface Comment {
@@ -34,9 +34,9 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
 
   const loadComments = useCallback(async () => {
     setError(null)
+    const connection = await getPooledSupabaseClient()
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
+      const { data, error } = await connection.client
         .from('snippet_comments')
         .select('*')
         .eq('snippet_id', snippet.id)
@@ -47,6 +47,8 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
     } catch (err) {
       console.error('Error loading comments:', err)
       setError('Failed to load comments. Please try again.')
+    } finally {
+      connection.release()
     }
   }, [snippet.id])
 
@@ -65,9 +67,9 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
 
     setLoading(true)
     setError(null)
+    const connection = await getPooledSupabaseClient()
     try {
-      const supabase = createClient()
-      const { error } = await supabase
+      const { error } = await connection.client
         .from('snippet_comments')
         .insert([
           {
@@ -87,6 +89,7 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
       setError('Failed to post comment. Please try again.')
     } finally {
       setLoading(false)
+      connection.release()
     }
   }
 
@@ -94,9 +97,9 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
     if (!window.confirm('Are you sure you want to delete this comment?')) return
 
     setError(null)
+    const connection = await getPooledSupabaseClient()
     try {
-      const supabase = createClient()
-      const { error } = await supabase
+      const { error } = await connection.client
         .from('snippet_comments')
         .delete()
         .eq('id', commentId)
@@ -108,6 +111,8 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
     } catch (err) {
       console.error('Error deleting comment:', err)
       setError('Failed to delete comment. Please try again.')
+    } finally {
+      connection.release()
     }
   }
 

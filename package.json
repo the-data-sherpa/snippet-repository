@@ -12,11 +12,15 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.1",
+    "@types/lodash": "^4.17.16",
     "@types/prismjs": "^1.26.5",
+    "@types/react-window": "^1.8.8",
+    "lodash": "^4.17.21",
     "next": "15.2.1",
     "prismjs": "^1.29.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-window": "^1.8.11"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

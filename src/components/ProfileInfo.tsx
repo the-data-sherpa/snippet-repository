@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getPooledSupabaseClient } from '@/context/AuthContext'
 
 interface ProfileData {
   username: string
@@ -9,12 +9,14 @@ interface ProfileData {
   email: string
 }
 
-export default function ProfileInfo({ initialProfile }: { initialProfile: ProfileData }) {
+export default function ProfileInfo({ profile }: { profile: ProfileData }) {
   const [isEditing, setIsEditing] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    username: profile.username,
+    name: profile.name
+  })
   const [error, setError] = useState<string | null>(null)
-  const [profile, setProfile] = useState(initialProfile)
-  const [formData, setFormData] = useState(initialProfile)
+  const [loading, setLoading] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -28,127 +30,116 @@ export default function ProfileInfo({ initialProfile }: { initialProfile: Profil
     setError(null)
     setLoading(true)
 
+    const connection = await getPooledSupabaseClient()
     try {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await connection.client
         .from('profiles')
         .update({
           username: formData.username,
-          name: formData.name,
+          name: formData.name
         })
         .eq('email', profile.email)
 
       if (updateError) throw updateError
 
-      setProfile(formData)
       setIsEditing(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred while updating profile')
+      console.error('Profile update error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to update profile')
     } finally {
       setLoading(false)
+      connection.release()
     }
   }
 
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">Profile Information</h2>
-        {!isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700"
-          >
-            Edit Profile
-          </button>
+  if (isEditing) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="bg-red-50 text-red-500 p-4 rounded-lg">
+            {error}
+          </div>
         )}
+
+        <div>
+          <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+            Username
+          </label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value={formData.username}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
+            required
+          />
+        </div>
+
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            Name
+          </label>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
+            required
+          />
+        </div>
+
+        <div className="flex space-x-4">
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-gray-800 text-white py-2 px-4 rounded-lg hover:bg-gray-700 disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsEditing(false)}
+            className="bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Username
+        </label>
+        <p className="mt-1 text-gray-900">{profile.username}</p>
       </div>
 
-      {error && (
-        <div className="mb-4 bg-red-50 text-red-500 p-4 rounded-lg">
-          {error}
-        </div>
-      )}
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Name
+        </label>
+        <p className="mt-1 text-gray-900">{profile.name}</p>
+      </div>
 
-      {isEditing ? (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-              Username
-            </label>
-            <input
-              type="text"
-              name="username"
-              id="username"
-              value={formData.username}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
-            />
-          </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">
+          Email
+        </label>
+        <p className="mt-1 text-gray-900">{profile.email}</p>
+      </div>
 
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-              Name
-            </label>
-            <input
-              type="text"
-              name="name"
-              id="name"
-              value={formData.name}
-              onChange={handleChange}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-black"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              id="email"
-              value={profile.email}
-              disabled
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 bg-gray-50"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFormData(profile)
-                setIsEditing(false)
-                setError(null)
-              }}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Username</label>
-            <p className="mt-1 text-gray-900">{profile.username}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
-            <p className="mt-1 text-gray-900">{profile.name}</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Email</label>
-            <p className="mt-1 text-gray-900">{profile.email}</p>
-          </div>
-        </div>
-      )}
+      <button
+        onClick={() => setIsEditing(true)}
+        className="bg-gray-800 text-white py-2 px-4 rounded-lg hover:bg-gray-700"
+      >
+        Edit Profile
+      </button>
     </div>
   )
 } 
