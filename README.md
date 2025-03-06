@@ -240,6 +240,61 @@ The application will be available at [http://localhost:3000](http://localhost:30
 - Tailwind CSS for styling
 - Supabase for backend and authentication
 
+## Docker Deployment
+
+You can deploy this application using Docker:
+
+### Prerequisites
+
+- Docker and Docker Compose installed on your server
+- Supabase project set up (as described in the Setup section)
+
+### Deployment Steps
+
+1. Clone the repository on your server:
+```bash
+git clone git@github.com:the-data-sherpa/snippet-repository.git
+cd snippit-repository
+```
+
+2. Set up your environment variables:
+```bash
+./setup-env.sh
+```
+This script will prompt you for your Supabase URL and Anon Key.
+
+3. Build and start the Docker containers:
+```bash
+./deploy.sh
+```
+
+4. The application will be available at http://your-server-ip:3000
+
+### Updating the Application
+
+To update the application to the latest version:
+
+```bash
+git pull
+./deploy.sh
+```
+
+### Viewing Logs
+
+To view the application logs:
+
+```bash
+docker-compose logs -f app
+```
+
+### Troubleshooting
+
+If you encounter issues during deployment:
+
+1. Make sure your Supabase credentials are correct
+2. Check the Docker logs: `docker-compose logs -f app`
+3. Ensure your Supabase project has the correct database schema and RLS policies
+
 ## Project Structure
 
 ```

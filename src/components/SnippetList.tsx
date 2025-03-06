@@ -1,16 +1,27 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Snippet } from '@/types/snippets'
 import Prism from 'prismjs'
 import EditSnippetModal from './EditSnippetModal'
 import NewSnippetModal from './NewSnippetModal'
-import { User } from '@supabase/supabase-js'
 import CommentModal from './CommentModal'
 
 // Import core Prism CSS
 import 'prismjs/themes/prism.css'
+// Import Prism language components
+import 'prismjs/components/prism-javascript'
+import 'prismjs/components/prism-typescript'
+import 'prismjs/components/prism-python'
+import 'prismjs/components/prism-java'
+import 'prismjs/components/prism-csharp'
+import 'prismjs/components/prism-go'
+import 'prismjs/components/prism-rust'
+import 'prismjs/components/prism-bash'
+import 'prismjs/components/prism-powershell'
+import 'prismjs/components/prism-sql'
+import 'prismjs/components/prism-markup' // For HTML
 
 interface VoteCount {
   upvotes: number
@@ -29,28 +40,12 @@ export default function SnippetList() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [votes, setVotes] = useState<Record<string, VoteCount>>({})
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filteredSnippets, setFilteredSnippets] = useState<Snippet[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({})
   const [commentSnippetId, setCommentSnippetId] = useState<string | null>(null)
-
-  // Initialize Prism languages
-  useEffect(() => {
-    require('prismjs/components/prism-javascript')
-    require('prismjs/components/prism-typescript')
-    require('prismjs/components/prism-python')
-    require('prismjs/components/prism-java')
-    require('prismjs/components/prism-csharp')
-    require('prismjs/components/prism-go')
-    require('prismjs/components/prism-rust')
-    require('prismjs/components/prism-bash')
-    require('prismjs/components/prism-powershell')
-    require('prismjs/components/prism-sql')
-    require('prismjs/components/prism-markup') // For HTML
-  }, [])
 
   // Get current user on mount
   useEffect(() => {
@@ -71,7 +66,7 @@ export default function SnippetList() {
     getUser()
   }, [])
 
-  const loadSnippets = async () => {
+  const loadSnippets = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('snippets')
@@ -87,9 +82,9 @@ export default function SnippetList() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const loadVotes = async () => {
+  const loadVotes = useCallback(async () => {
     try {
       const { data: voteData, error: voteError } = await supabase
         .from('snippet_votes')
@@ -121,9 +116,9 @@ export default function SnippetList() {
     } catch (err) {
       console.error('Error loading votes:', err)
     }
-  }
+  }, [currentUser])
 
-  const loadCommentCounts = async () => {
+  const loadCommentCounts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('snippet_comments')
@@ -140,13 +135,13 @@ export default function SnippetList() {
     } catch (err) {
       console.error('Error loading comment counts:', err)
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadSnippets()
     loadVotes()
     loadCommentCounts()
-  }, [])
+  }, [loadSnippets, loadVotes, loadCommentCounts])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -159,7 +154,7 @@ export default function SnippetList() {
     const filtered = snippets.filter(snippet => {
       const matchesSearch = 
         snippet.title.toLowerCase().includes(searchLower) ||
-        snippet.description.toLowerCase().includes(searchLower) ||
+        (snippet.description?.toLowerCase().includes(searchLower) || false) ||
         snippet.language.toLowerCase().includes(searchLower)
 
       const matchesTags = selectedTags.length === 0 || 
@@ -200,6 +195,8 @@ export default function SnippetList() {
     }
   }
 
+  // This function is used in the JSX below via button click
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDelete = async (snippetId: string) => {
     try {
       const { error } = await supabase
@@ -247,7 +244,8 @@ export default function SnippetList() {
     )
   }
 
-  // Pass loadSnippets to NewSnippetModal
+  // This function is used in the JSX below via button click
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleNewSnippet = () => {
     setIsModalOpen(true)
   }

@@ -1,4 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
@@ -15,8 +15,24 @@ export async function GET(request: Request) {
   })
 
   if (code) {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name) {
+            return cookieStore.get(name)?.value
+          },
+          set(name, value, options) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name, options) {
+            cookieStore.set({ name, value: '', ...options })
+          }
+        }
+      }
+    )
     
     try {
       // Log cookies before exchange
@@ -43,22 +59,7 @@ export async function GET(request: Request) {
         cookieNames: cookieStore.getAll().map(c => c.name)
       })
 
-      // Verify session was created
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      console.log('Auth Callback - Session verification:', {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        userEmail: session?.user?.email,
-        error: sessionError?.message,
-        accessToken: session ? 'present' : 'missing',
-        refreshToken: session?.refresh_token ? 'present' : 'missing'
-      })
-
-      if (!session) {
-        throw new Error('Failed to establish session after exchange')
-      }
-
-      // Verify user data
+      // Verify user data with getUser() which is more secure
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       console.log('Auth Callback - User verification:', {
         hasUser: !!user,
@@ -66,6 +67,10 @@ export async function GET(request: Request) {
         userEmail: user?.email,
         error: userError?.message
       })
+
+      if (!user) {
+        throw new Error('Failed to verify user after exchange')
+      }
 
     } catch (error) {
       console.error('Auth Callback - Error:', {
@@ -81,7 +86,7 @@ export async function GET(request: Request) {
   }
 
   // Final cookie check before redirect
-  const finalCookies = cookies()
+  const finalCookies = await cookies()
   console.log('Auth Callback - Final cookie state:', {
     cookieNames: finalCookies.getAll().map(c => c.name),
     hasAuthCookie: finalCookies.getAll().some(c => c.name.includes('auth'))

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/utils/supabase/client'
 import Prism from 'prismjs'
 
 interface Comment {
@@ -13,6 +13,7 @@ interface Comment {
 }
 
 interface Snippet {
+  id: string
   language: string
   code: string
 }
@@ -29,16 +30,12 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState('')
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (isOpen) {
-      loadComments()
-      Prism.highlightAll()
-    }
-  }, [isOpen])
-
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
+    setError(null)
     try {
+      const supabase = createClient()
       const { data, error } = await supabase
         .from('snippet_comments')
         .select('*')
@@ -46,18 +43,30 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
         .order('created_at', { ascending: true })
 
       if (error) throw error
-      setComments(data)
+      setComments(data || [])
     } catch (err) {
       console.error('Error loading comments:', err)
+      setError('Failed to load comments. Please try again.')
     }
-  }
+  }, [snippet.id])
+
+  useEffect(() => {
+    if (isOpen) {
+      loadComments()
+      setTimeout(() => {
+        Prism.highlightAll()
+      }, 100)
+    }
+  }, [isOpen, snippet.id, loadComments])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!currentUser || !newComment.trim()) return
 
     setLoading(true)
+    setError(null)
     try {
+      const supabase = createClient()
       const { error } = await supabase
         .from('snippet_comments')
         .insert([
@@ -71,10 +80,11 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
       if (error) throw error
 
       setNewComment('')
-      loadComments()
+      await loadComments()
       onCommentChange()
     } catch (err) {
       console.error('Error posting comment:', err)
+      setError('Failed to post comment. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -83,7 +93,9 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
   const handleDeleteComment = async (commentId: string) => {
     if (!window.confirm('Are you sure you want to delete this comment?')) return
 
+    setError(null)
     try {
+      const supabase = createClient()
       const { error } = await supabase
         .from('snippet_comments')
         .delete()
@@ -91,11 +103,11 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
 
       if (error) throw error
 
-      loadComments()
+      await loadComments()
       onCommentChange()
     } catch (err) {
       console.error('Error deleting comment:', err)
-      alert('Failed to delete comment')
+      setError('Failed to delete comment. Please try again.')
     }
   }
 
@@ -128,6 +140,12 @@ export default function CommentModal({ snippet, isOpen, onClose, currentUser, on
               ✕
             </button>
           </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg">
+              {error}
+            </div>
+          )}
 
           <div className="mb-6">
             <div className="rounded-lg overflow-hidden bg-[#1e1e1e]">

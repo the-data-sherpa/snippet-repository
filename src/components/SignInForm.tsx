@@ -1,11 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-
-// Get the project reference from your Supabase URL
-const PROJECT_REF = 'dmizlbynkymnaopdgkdm'
+import { createClient } from '@/utils/supabase/client'
 
 export default function SignInForm() {
   const router = useRouter()
@@ -17,27 +14,44 @@ export default function SignInForm() {
   })
 
   useEffect(() => {
+    const supabase = createClient()
+    
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      console.log('SignInForm - Initial session check:', {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        accessToken: session?.access_token ? 'present' : 'missing'
+      // Use getUser() which is more secure as it authenticates with the Supabase Auth server
+      const { data: { user }, error } = await supabase.auth.getUser()
+      
+      console.log('SignInForm - Initial auth check:', {
+        isAuthenticated: !!user,
+        userId: user?.id,
+        error: error?.message
       })
+      
+      // If already signed in, redirect to home
+      if (user) {
+        router.push('/')
+      }
     }
     checkSession()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('SignInForm - Auth state change:', {
         event,
-        hasSession: !!session,
-        userId: session?.user?.id,
-        accessToken: session?.access_token ? 'present' : 'missing'
+        hasSession: !!session
       })
+      
+      // For SIGNED_IN events, verify the user with getUser()
+      if (event === 'SIGNED_IN') {
+        const { data: { user } } = await supabase.auth.getUser()
+        console.log('SignInForm - Verified user after sign in:', {
+          isAuthenticated: !!user,
+          userId: user?.id
+        })
+        router.refresh()
+      }
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [router])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -53,60 +67,31 @@ export default function SignInForm() {
 
     try {
       console.log('SignInForm - Starting sign in process')
+      const supabase = createClient()
       
       // Sign in with Supabase
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       })
 
       if (signInError) throw signInError
 
-      console.log('SignInForm - Sign in response:', {
-        success: true,
-        hasUser: !!signInData?.user,
-        userId: signInData?.user?.id,
-        hasSession: !!signInData?.session
-      })
-
-      // Wait for session to be established
-      let session = signInData.session
-      if (!session) {
-        throw new Error('No session in sign-in response')
+      // Verify the user with getUser() which is more secure
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error(userError?.message || 'Failed to authenticate user')
       }
 
-      // Set auth cookie with exact Supabase format
-      const cookieOptions = 'path=/;max-age=28800;secure;samesite=lax'
-      const cookieName = `sb-${PROJECT_REF}-auth-token`
-      const cookieValue = JSON.stringify({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-        expires_in: 3600,
-        token_type: 'bearer',
-        type: 'access_token'
-      })
-
-      document.cookie = `${cookieName}=${encodeURIComponent(cookieValue)};${cookieOptions}`
-
-      // Wait a moment for cookies to be set
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      // Verify session with server
-      const response = await fetch('/api/auth/check', {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
+      console.log('SignInForm - Authentication successful:', {
+        userId: user.id
       })
       
-      const responseData = await response.json()
-      console.log('SignInForm - Server response:', responseData)
-
-      if (!response.ok) {
-        throw new Error(responseData.error || 'Failed to verify session with server')
-      }
-
-      console.log('SignInForm - Authentication successful, redirecting')
+      // Wait a moment for session to be fully established
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      console.log('SignInForm - Redirecting')
       router.refresh()
       router.push('/')
     } catch (err) {

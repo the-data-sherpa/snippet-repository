@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/utils/supabase/client'
 import UserMenu from './UserMenu'
 import { useRouter } from 'next/navigation'
 import NewSnippetModal from './NewSnippetModal'
@@ -20,23 +20,25 @@ export default function Navigation({ showAuthButtons = true }: NavigationProps) 
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // Check session with Supabase
-        const { data: { session } } = await supabase.auth.getSession()
+        const supabase = createClient()
+        
+        // Check authentication with Supabase using getUser() which is more secure
+        const { data: { user }, error } = await supabase.auth.getUser()
         
         // Verify session with our API
         const response = await fetch('/api/auth/check')
-        const sessionCheck = await response.json()
+        const authCheck = await response.json()
 
-        console.log('Navigation - Session check:', {
-          hasSupabaseSession: !!session,
-          hasServerSession: sessionCheck.session,
-          userId: session?.user?.id,
-          hasAuthCookie: sessionCheck.hasAuthCookie
+        console.log('Navigation - Auth check:', {
+          hasUser: !!user,
+          isAuthenticated: authCheck.authenticated,
+          userId: user?.id,
+          error: error?.message
         })
 
-        setIsAuthenticated(!!session && sessionCheck.session)
+        setIsAuthenticated(!!user && authCheck.authenticated)
       } catch (error) {
-        console.error('Navigation - Session check error:', error)
+        console.error('Navigation - Auth check error:', error)
         setIsAuthenticated(false)
       } finally {
         setLoading(false)
@@ -45,17 +47,19 @@ export default function Navigation({ showAuthButtons = true }: NavigationProps) 
 
     checkSession()
 
+    const supabase = createClient()
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Navigation - Auth state change:', { event, hasSession: !!session })
       
       if (event === 'SIGNED_IN') {
-        // Verify session with API after sign in
+        // Verify authentication with getUser() after sign in
         try {
+          const { data: { user } } = await supabase.auth.getUser()
           const response = await fetch('/api/auth/check')
-          const sessionCheck = await response.json()
-          setIsAuthenticated(!!session && sessionCheck.session)
+          const authCheck = await response.json()
+          setIsAuthenticated(!!user && authCheck.authenticated)
         } catch (error) {
-          console.error('Navigation - Session verification error:', error)
+          console.error('Navigation - Auth verification error:', error)
           setIsAuthenticated(false)
         }
         router.refresh()

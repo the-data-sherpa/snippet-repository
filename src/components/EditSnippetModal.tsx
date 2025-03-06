@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, RefObject } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Snippet } from '@/types/snippets'
 import { useClickOutside } from '@/hooks/useClickOutside'
@@ -41,7 +41,7 @@ export default function EditSnippetModal({ snippet, isOpen, onClose, onUpdate }:
 
   const modalRef = useRef<HTMLDivElement>(null)
   
-  useClickOutside(modalRef, () => {
+  useClickOutside(modalRef as RefObject<HTMLElement>, () => {
     onClose()
   })
 

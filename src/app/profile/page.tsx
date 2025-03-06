@@ -1,14 +1,32 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Navigation from '@/components/Navigation'
 import ProfileInfo from '@/components/ProfileInfo'
 import PasswordChange from '@/components/PasswordChange'
+import { redirect } from 'next/navigation'
 
 export default async function ProfilePage() {
-  const supabase = createServerComponentClient({ cookies })
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name) {
+          return cookieStore.get(name)?.value
+        }
+      }
+    }
+  )
   
-  const { data: { session } } = await supabase.auth.getSession()
-  console.log('Profile Page - Session:', !!session)
+  // Use getUser() which is more secure as it authenticates with the Supabase Auth server
+  const { data: { user }, error } = await supabase.auth.getUser()
+  console.log('Profile Page - User:', !!user)
+  
+  if (!user || error) {
+    console.log('Profile Page - Not authenticated:', error?.message)
+    redirect('/signin')
+  }
   
   const { data: profile } = await supabase
     .from('profiles')

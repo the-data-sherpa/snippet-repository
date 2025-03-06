@@ -5,6 +5,7 @@ export async function updateUsername(newUsername: string) {
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError) throw userError
+    if (!user || !user.email) throw new Error('User not authenticated or missing email')
 
     // Get current profile
     const { data: profile, error: profileError } = await supabase

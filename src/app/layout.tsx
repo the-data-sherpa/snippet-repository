@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import "./reset.css";
 import "./globals.css";
 import { AuthProvider } from '@/context/AuthProvider'
 import './prism-theme.css'
@@ -25,13 +26,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans antialiased`}
       >
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <div className="relative flex min-h-screen flex-col">
+          <div className="flex-1">
+            <AuthProvider>
+              {children}
+            </AuthProvider>
+          </div>
+        </div>
       </body>
     </html>
   );

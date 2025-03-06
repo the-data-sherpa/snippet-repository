@@ -1,69 +1,34 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
 
-const PROJECT_REF = 'dmizlbynkymnaopdgkdm'
-
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const cookieStore = await cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    // Create a Supabase client with the correct cookie handling for Next.js 15
+    const supabase = await createClient()
 
-    // Get both session and user data
-    const [sessionResponse, userResponse] = await Promise.all([
-      supabase.auth.getSession(),
-      supabase.auth.getUser()
-    ])
-
-    const { data: { session }, error: sessionError } = sessionResponse
-    const { data: { user }, error: userError } = userResponse
-
-    // Get all cookies
-    const allCookies = await cookieStore.getAll()
-    const authCookie = allCookies.find(c => c.name === `sb-${PROJECT_REF}-auth-token`)
+    // Get user data directly using getUser() which is more secure
+    // as it authenticates with the Supabase Auth server
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     console.log('Session Check API - Details:', {
-      hasSession: !!session,
-      hasUser: !!user,
-      sessionUserId: session?.user?.id,
+      authenticated: !!user,
       userId: user?.id,
-      sessionError: sessionError?.message,
-      userError: userError?.message,
-      hasAuthCookie: !!authCookie,
-      cookieNames: allCookies.map(c => c.name)
+      userError: userError?.message
     })
 
-    if (sessionError || userError) {
-      console.error('Session Check API - Auth error:', { sessionError, userError })
+    if (userError) {
       return NextResponse.json({ 
-        session: false,
-        error: sessionError?.message || userError?.message,
-        details: 'Auth error occurred'
+        authenticated: false,
+        error: userError.message
       }, { status: 401 })
     }
 
-    if (!user) {
-      return NextResponse.json({ 
-        session: false,
-        error: 'No authenticated user found',
-        details: 'User is null or undefined'
-      }, { status: 401 })
-    }
-
-    return NextResponse.json({ 
-      session: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        user_metadata: user.user_metadata
-      }
+    return NextResponse.json({
+      authenticated: !!user,
+      user: user
     })
   } catch (error) {
-    console.error('Session Check API - Critical error:', error)
-    return NextResponse.json({
-      session: false,
-      error: 'Failed to check session',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    console.error('Session check error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 } 

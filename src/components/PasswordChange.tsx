@@ -36,8 +36,16 @@ export default function PasswordChange() {
 
     try {
       // First verify the current password
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData.user?.email;
+      
+      if (!userEmail) {
+        setError('Unable to retrieve user email');
+        return;
+      }
+      
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: (await supabase.auth.getUser()).data.user?.email!,
+        email: userEmail,
         password: formData.currentPassword,
       })
 

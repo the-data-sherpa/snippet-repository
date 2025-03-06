@@ -1,9 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useRef, useEffect, RefObject, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Snippet } from '@/types/snippets'
 import { useClickOutside } from '@/hooks/useClickOutside'
 
 interface NewSnippetModalProps {
@@ -13,18 +11,17 @@ interface NewSnippetModalProps {
 }
 
 export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnippetModalProps) {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  // Initial form state
-  const initialFormState = {
+  // Use useMemo for initialFormState to prevent it from changing on every render
+  const initialFormState = useMemo(() => ({
     title: '',
     description: '',
     code: '',
     language: '',
     tags: ''
-  }
+  }), [])
   
   const [formData, setFormData] = useState(initialFormState)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -35,9 +32,10 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
       setFormData(initialFormState)
       setError(null)
     }
-  }, [isOpen])
+  }, [isOpen, initialFormState])
 
-  useClickOutside(modalRef, () => {
+  // Type assertion to make the ref compatible with useClickOutside
+  useClickOutside(modalRef as RefObject<HTMLElement>, () => {
     onClose()
   })
 
@@ -74,7 +72,7 @@ export default function NewSnippetModal({ isOpen, onClose, onSuccess }: NewSnipp
       }
 
       // Insert the snippet
-      const { data, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('snippets')
         .insert([
           {

@@ -5,18 +5,57 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #1f2937;
+  --accent: #3b82f6;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #2563eb;
+  --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --secondary: #1f2937;
+    --secondary-foreground: #f3f4f6;
+    --accent: #60a5fa;
+    --muted: #1f2937;
+    --muted-foreground: #9ca3af;
+    --card: #111827;
+    --card-foreground: #ededed;
+    --border: #374151;
+    --input: #374151;
+    --ring: #3b82f6;
   }
 }
 
 body {
-  @apply bg-gray-50;
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-md text-sm font-medium;
+  }
+  .btn-primary {
+    @apply bg-primary text-white hover:opacity-90;
+  }
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:opacity-90;
+  }
+  .input {
+    @apply flex h-10 w-full rounded-md border px-3 py-2 text-sm;
+  }
 }
