@@ -32,7 +32,10 @@ interface VoteCount {
 export default function SnippetList() {
   const [snippets, setSnippets] = useState<Snippet[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingVotes, setLoadingVotes] = useState(true)
+  const [loadingComments, setLoadingComments] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -78,13 +81,17 @@ export default function SnippetList() {
       setAvailableTags(getUniqueTags(data))
     } catch (err) {
       console.error('Error loading snippets:', err)
-      setError('Failed to load snippets')
+      setError('Failed to load snippets. Click to retry.')
+      // Keep loading true if error occurs
+      return false
     } finally {
       setLoading(false)
     }
+    return true
   }, [])
 
   const loadVotes = useCallback(async () => {
+    setLoadingVotes(true)
     try {
       const { data: voteData, error: voteError } = await supabase
         .from('snippet_votes')
@@ -115,10 +122,13 @@ export default function SnippetList() {
       setVotes(voteCounts)
     } catch (err) {
       console.error('Error loading votes:', err)
+    } finally {
+      setLoadingVotes(false)
     }
   }, [currentUser])
 
   const loadCommentCounts = useCallback(async () => {
+    setLoadingComments(true)
     try {
       const { data, error } = await supabase
         .from('snippet_comments')
@@ -134,14 +144,20 @@ export default function SnippetList() {
       setCommentCounts(counts)
     } catch (err) {
       console.error('Error loading comment counts:', err)
+    } finally {
+      setLoadingComments(false)
     }
   }, [])
 
   useEffect(() => {
-    loadSnippets()
-    loadVotes()
-    loadCommentCounts()
-  }, [loadSnippets, loadVotes, loadCommentCounts])
+    const loadAllData = async () => {
+      const snippetsLoaded = await loadSnippets()
+      if (snippetsLoaded) {
+        await Promise.all([loadVotes(), loadCommentCounts()])
+      }
+    }
+    loadAllData()
+  }, [loadSnippets, loadVotes, loadCommentCounts, retryCount])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -348,12 +364,31 @@ export default function SnippetList() {
     setCommentSnippetId(snippetId)
   }
 
-  if (loading) {
-    return <div className="text-center py-4">Loading snippets...</div>
+  if (loading && !error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mb-4"></div>
+        <div className="text-gray-600">Loading snippets...</div>
+      </div>
+    )
   }
 
   if (error) {
-    return <div className="text-red-500 text-center py-4">{error}</div>
+    return (
+      <div 
+        onClick={() => {
+          setError(null)
+          setLoading(true)
+          setRetryCount(count => count + 1)
+        }}
+        className="text-red-500 text-center py-8 cursor-pointer hover:text-red-600"
+      >
+        <div className="mb-2">{error}</div>
+        <button className="px-4 py-2 bg-red-100 rounded-lg text-red-700 hover:bg-red-200 transition-colors">
+          Retry Loading
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -567,7 +602,11 @@ export default function SnippetList() {
                       />
                     </svg>
                     <span className="text-sm font-medium">
-                      {commentCounts[snippet.id] || 0}
+                      {loadingComments ? (
+                        <div className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
+                      ) : (
+                        commentCounts[snippet.id] || 0
+                      )}
                     </span>
                   </button>
 
@@ -575,7 +614,7 @@ export default function SnippetList() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleVote(snippet.id, true)}
-                      disabled={!currentUser}
+                      disabled={!currentUser || loadingVotes}
                       className={`p-1 hover:bg-gray-100 transition-colors ${
                         votes[snippet.id]?.userVote === true 
                           ? 'text-green-600' 
@@ -588,17 +627,23 @@ export default function SnippetList() {
                       </svg>
                     </button>
                     <span className={`text-base font-semibold min-w-[2rem] text-center ${
-                      ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) > 0
-                        ? 'text-green-700'
-                        : ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) < 0
-                          ? 'text-blue-700'
-                          : 'text-gray-600'
+                      loadingVotes 
+                        ? 'text-gray-400'
+                        : ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) > 0
+                          ? 'text-green-700'
+                          : ((votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)) < 0
+                            ? 'text-blue-700'
+                            : 'text-gray-600'
                     }`}>
-                      {(votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)}
+                      {loadingVotes ? (
+                        <div className="w-4 h-4 mx-auto rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
+                      ) : (
+                        (votes[snippet.id]?.upvotes || 0) - (votes[snippet.id]?.downvotes || 0)
+                      )}
                     </span>
                     <button
                       onClick={() => handleVote(snippet.id, false)}
-                      disabled={!currentUser}
+                      disabled={!currentUser || loadingVotes}
                       className={`p-1 hover:bg-gray-100 transition-colors ${
                         votes[snippet.id]?.userVote === false 
                           ? 'text-blue-600' 
